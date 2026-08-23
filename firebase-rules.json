@@ -1,0 +1,13 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      ".read": true,
+      ".write": false,
+      "$code": {
+        ".write": "$code.matches(/^[0-9]{6}$/)"
+      }
+    }
+  }
+}

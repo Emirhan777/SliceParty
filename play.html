@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#07060f" />
+  <title>Fruit Ninja — Your Sword</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --ink: #fff;
+      --dim: rgba(255,255,255,0.5);
+      --accent: #7fdcff;
+      --good: #39d98a;
+      --bad: #ff5a5a;
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    html, body {
+      height: 100%; background: #07060f; color: var(--ink);
+      font-family: var(--font); overflow: hidden; overscroll-behavior: none;
+      touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    .screen {
+      position: fixed; inset: 0; display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+      text-align: center;
+    }
+    .screen.on { display: flex; }
+
+    h1 { font-size: 30px; font-weight: 900; letter-spacing: -0.02em; }
+    h1 .g { background: linear-gradient(100deg, #ff5a5a, #ffd93d 45%, #39d98a);
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .muted { color: var(--dim); font-size: 15px; line-height: 1.5; max-width: 30ch; }
+
+    #playBtn {
+      margin-top: 8px; width: 62vw; max-width: 260px; aspect-ratio: 1; border-radius: 50%;
+      border: 0; background: linear-gradient(150deg, #ff5a5a, #ffd93d);
+      color: #2a1400; font: 900 30px var(--font); cursor: pointer;
+      box-shadow: 0 14px 50px rgba(255,140,60,0.35);
+    }
+    #playBtn:active { transform: scale(0.97); }
+
+    /* ---- controller ---- */
+    #ctrl { justify-content: space-between; }
+    #ctrlTop { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; }
+    #hudScore .lbl { font-size: 9px; letter-spacing: 0.4em; color: var(--dim); font-weight: 700; }
+    #hudScore .val { font-size: 44px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    #hudLives { display: flex; gap: 7px; padding-top: 4px; }
+    #hudLives .x {
+      width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+      font-size: 14px; font-weight: 900; background: rgba(255,90,90,0.16);
+      color: var(--bad); border: 2px solid rgba(255,90,90,0.5); transition: opacity .25s;
+    }
+    #hudLives .x.spent { opacity: 0.16; }
+
+    #ctrlMid { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #bigMsg { font-size: 26px; font-weight: 900; }
+    #smallMsg { color: var(--dim); font-size: 15px; max-width: 26ch; }
+    #modeTag { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: var(--accent);
+      border: 1px solid rgba(127,220,255,0.35); border-radius: 999px; padding: 5px 12px; }
+
+    #ctrlBottom { width: 100%; display: flex; flex-direction: column; gap: 14px; }
+    .row { display: flex; gap: 10px; }
+    button.act {
+      flex: 1; font: 700 16px var(--font); padding: 16px 12px; border: 0; border-radius: 14px;
+      background: rgba(255,255,255,0.09); color: var(--ink); cursor: pointer;
+    }
+    button.act:active { background: rgba(255,255,255,0.18); }
+    button.act.primary { background: var(--accent); color: #06222b; }
+    #sensWrap { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--dim); font-weight: 700; }
+    #sens { flex: 1; accent-color: var(--accent); height: 30px; }
+
+    #conn { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dim); font-weight: 600; }
+    #conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+    #conn.live .dot { background: var(--good); box-shadow: 0 0 10px var(--good); }
+
+    #errText { color: var(--bad); font-size: 16px; font-weight: 700; max-width: 30ch; }
+  </style>
+</head>
+<body>
+  <!-- 1. the gesture screen. iOS will not hand over motion data without it. -->
+  <div class="screen on" id="intro">
+    <h1><span class="g">Fruit Ninja</span></h1>
+    <p class="muted">Hold your phone upright and swing it like a sword. Watch the big screen.</p>
+    <button id="playBtn">PLAY</button>
+    <p class="muted" id="introNote">room <b id="roomText">—</b></p>
+  </div>
+
+  <!-- 2. the controller -->
+  <div class="screen" id="ctrl">
+    <div id="ctrlTop">
+      <div id="hudScore"><div class="lbl">SCORE</div><div class="val" id="scoreVal">0</div></div>
+      <div id="hudLives"></div>
+    </div>
+
+    <div id="ctrlMid">
+      <div id="modeTag">TILT</div>
+      <div id="bigMsg">Swing!</div>
+      <div id="smallMsg">Your sword is on the big screen.</div>
+    </div>
+
+    <div id="ctrlBottom">
+      <div id="sensWrap"><span>SLOW</span><input id="sens" type="range" min="0.5" max="2" step="0.05" /><span>FAST</span></div>
+      <div class="row">
+        <button class="act" id="centerBtn">Center</button>
+        <button class="act primary" id="againBtn">Play again</button>
+      </div>
+      <div id="conn"><span class="dot"></span><span id="connText">connecting…</span></div>
+    </div>
+  </div>
+
+  <!-- 3. something went wrong -->
+  <div class="screen" id="fail">
+    <div id="errText"></div>
+    <p class="muted">Scan the QR code on the big screen again.</p>
+  </div>
+
+  <script type="module">
+    import { createController } from "./ninja/net.js";
+    import { createTracker, SENS_MIN, SENS_MAX } from "./ninja/tilt.js";
+
+    const $ = (id) => document.getElementById(id);
+    const show = (id) => ["intro", "ctrl", "fail"].forEach((s) => $(s).classList.toggle("on", s === id));
+    const fail = (msg) => { $("errText").textContent = msg; show("fail"); };
+
+    const code = new URLSearchParams(location.search).get("room");
+    if (!code) fail("No room code in the link.");
+    $("roomText").textContent = code || "—";
+
+    const tracker = createTracker();
+    let ctrl = null;
+    let mode = null;            // "tilt" | "touch"
+    let lastStatus = null;
+    let wakeLock = null;
+
+    // PLAY does nothing useful until the room join has landed, and a button that
+    // silently ignores you is worse than one that says it is not ready yet.
+    const playBtn = $("playBtn");
+    playBtn.disabled = true;
+    playBtn.style.filter = "grayscale(0.7)";
+    playBtn.textContent = "…";
+
+    // ---- join immediately; the PLAY button only unlocks the sensors ---------
+    try {
+      ctrl = await createController(code, {
+        onHud(hud) {
+          $("scoreVal").textContent = hud.score ?? 0;
+          renderLives(hud.lives ?? 3);
+        },
+        onStatus(status) {
+          lastStatus = status;
+          paintStatus(status);
+        },
+        onClosed() { fail("The big screen closed the game."); },
+      });
+      setConn(true, "connected to room " + code);
+      playBtn.disabled = false;
+      playBtn.style.filter = "";
+      playBtn.textContent = "PLAY";
+    } catch (e) {
+      fail(e.message);
+    }
+
+    function setConn(on, text) {
+      $("conn").classList.toggle("live", on);
+      $("connText").textContent = text;
+    }
+
+    function renderLives(lives) {
+      const box = $("hudLives");
+      if (box.children.length !== 3) {
+        box.innerHTML = "";
+        for (let i = 0; i < 3; i++) {
+          const d = document.createElement("div");
+          d.className = "x";
+          d.textContent = "✕";
+          box.appendChild(d);
+        }
+      }
+      [...box.children].forEach((el, i) => el.classList.toggle("spent", i >= lives));
+    }
+    renderLives(3);
+
+    function paintStatus(status) {
+      const over = status === "over";
+      $("againBtn").style.display = over ? "block" : "none";
+      if (over) { $("bigMsg").textContent = "Run over"; $("smallMsg").textContent = "Slash the circle on the big screen, or tap below."; }
+      else if (status === "playing") { $("bigMsg").textContent = "Swing!"; $("smallMsg").textContent = "Your sword is on the big screen."; }
+      else { $("bigMsg").textContent = "Ready"; $("smallMsg").textContent = "Swing to warm up — the run starts when you do."; }
+    }
+    paintStatus(null);
+
+    // ---- the one gesture that unlocks everything ---------------------------
+    playBtn.onclick = async () => {
+      if (!ctrl) return;
+      // The motion-permission prompt has to happen inside this gesture - iOS
+      // will not grant it from any later callback.
+      await enableTilt();
+      show("ctrl");
+      keepAwake();
+      tracker.center();
+      ctrl.sendCmd("start");
+      paintStatus(lastStatus);
+    };
+
+    async function enableTilt() {
+      // iOS 13+ hands out motion only from inside a user gesture, and only over
+      // HTTPS. On http://<lan-ip> no event ever fires, which is exactly what the
+      // touch fallback below is for.
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return useTouch("Motion access denied");
+        }
+        addEventListener("deviceorientation", onOrient);
+        mode = "tilt";
+        // If nothing arrives shortly, this device is not going to send anything.
+        setTimeout(() => { if (mode === "tilt" && !gotOrient) useTouch("No motion sensor here"); }, 1500);
+      } catch {
+        useTouch("Motion not available");
+      }
+    }
+
+    let gotOrient = false;
+    function onOrient(e) {
+      if (mode !== "tilt") return;
+      const s = tracker.push(e.alpha, e.beta);
+      if (!s) return;
+      if (!gotOrient) { gotOrient = true; setConn(true, "tilt sword live"); }
+      ctrl?.sendBlade(s);
+    }
+
+    // ---- fallback: drag anywhere on the phone -------------------------------
+    // Also how you test the whole relay from a second desktop tab.
+    function useTouch(why) {
+      if (mode === "touch") return;
+      if (mode === "tilt") removeEventListener("deviceorientation", onOrient);
+      mode = "touch";
+      $("modeTag").textContent = "TOUCH";
+      $("smallMsg").textContent = "Drag anywhere to swing.";
+      setConn(true, why + " — drag to swing");
+      $("sensWrap").style.display = "none";
+
+      const send = (e) => {
+        const s = tracker.pushPoint(e.clientX / innerWidth, e.clientY / innerHeight);
+        ctrl?.sendBlade(s);
+      };
+      let down = false;
+      addEventListener("pointerdown", (e) => { down = true; send(e); });
+      addEventListener("pointermove", (e) => { if (down) send(e); });
+      addEventListener("pointerup", () => { down = false; });
+      addEventListener("pointercancel", () => { down = false; });
+    }
+
+    // ---- controls -----------------------------------------------------------
+    const sens = $("sens");
+    sens.min = SENS_MIN; sens.max = SENS_MAX;
+    sens.value = tracker.sensitivity;
+    sens.oninput = () => { tracker.sensitivity = parseFloat(sens.value); tracker.center(); };
+
+    $("centerBtn").onclick = () => { tracker.center(); ctrl?.sendCmd("center"); };
+    $("againBtn").onclick = () => ctrl?.sendCmd("again");
+    $("againBtn").style.display = "none";
+
+    // Double-tap anywhere on the controller recentres too — reaching for a
+    // button mid-run is exactly when you do not want to look down.
+    let lastTap = 0;
+    $("ctrl").addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button, input")) return;
+      const now = Date.now();
+      if (now - lastTap < 320) tracker.center();
+      lastTap = now;
+    });
+
+    // ---- housekeeping -------------------------------------------------------
+    async function keepAwake() {
+      try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") { keepAwake(); tracker.center(); }
+    });
+    addEventListener("pagehide", () => ctrl?.destroy());
+  </script>
+</body>
+</html>

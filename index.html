@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fruit Ninja Online — Big Screen</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --ink: #fff;
+      --dim: rgba(255,255,255,0.55);
+      --accent: #7fdcff;
+      --bad: #ff5a5a;
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    html, body { height: 100%; background: #07060f; color: var(--ink); font-family: var(--font); overflow: hidden; }
+
+    #stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+    .ov { position: fixed; pointer-events: none; z-index: 5; text-shadow: 0 2px 12px rgba(0,0,0,0.9); }
+
+    /* score, top left */
+    #scoreBox { top: 3vh; left: 3vw; }
+    #scoreBox .lbl { font-size: 1.1vh; letter-spacing: 0.42em; color: var(--dim); font-weight: 700; }
+    #scoreBox .val { font-size: 6.4vh; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    #scoreBox .best { font-size: 1.7vh; color: var(--dim); font-weight: 600; margin-top: 0.4vh; }
+
+    /* lives, top right */
+    #livesBox { top: 3vh; right: 3vw; display: flex; gap: 1.1vh; }
+    #livesBox .x {
+      width: 4.4vh; height: 4.4vh; border-radius: 50%;
+      display: grid; place-items: center; font-size: 2.4vh; font-weight: 900;
+      background: rgba(255,90,90,0.16); color: var(--bad);
+      border: 2px solid rgba(255,90,90,0.5); transition: opacity .25s, transform .25s;
+    }
+    #livesBox .x.spent { opacity: 0.16; transform: scale(0.82); }
+
+    /* connection pill, bottom left */
+    #connBox { bottom: 3vh; left: 3vw; display: flex; align-items: center; gap: 0.9vh;
+      font-size: 1.7vh; color: var(--dim); font-weight: 600; }
+    #connBox .dot { width: 1.1vh; height: 1.1vh; border-radius: 50%; background: #ff5a5a; }
+    #connBox.live .dot { background: #39d98a; box-shadow: 0 0 12px #39d98a; }
+
+    /* the join card */
+    #lobby {
+      position: fixed; inset: 0; z-index: 6;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vh;
+      pointer-events: none;
+    }
+    #lobby h1 { font-size: 6vh; font-weight: 900; letter-spacing: -0.02em; }
+    #lobby h1 .g { background: linear-gradient(100deg, #ff5a5a, #ffd93d 45%, #39d98a);
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #lobby .card { background: #fff; padding: 1.6vh; border-radius: 2.2vh; box-shadow: 0 1.4vh 6vh rgba(0,0,0,0.6); }
+    #lobby .card img { display: block; width: 34vh; height: 34vh; }
+    #lobby .card .fallback { width: 34vh; height: 34vh; display: none; place-items: center;
+      color: #111; font-size: 2vh; text-align: center; padding: 2vh; }
+    #lobby .cap { font-size: 2.8vh; font-weight: 800; }
+    #lobby .sub { font-size: 1.9vh; color: var(--dim); }
+    #lobby .sub b { color: var(--ink); letter-spacing: 0.3em; font-size: 2.2vh; }
+    #lobby .url { font-size: 1.5vh; color: rgba(255,255,255,0.32); word-break: break-all; max-width: 60vw; text-align: center; }
+
+    #ready { position: fixed; inset: 0; z-index: 6; display: none;
+      flex-direction: column; align-items: center; justify-content: center; gap: 1.6vh; pointer-events: none; }
+    #ready .big { font-size: 5vh; font-weight: 900; }
+    #ready .sub { font-size: 2.2vh; color: var(--dim); }
+
+    #err { position: fixed; inset: 0; z-index: 9; display: none;
+      flex-direction: column; align-items: center; justify-content: center; gap: 1.4vh;
+      background: #07060f; text-align: center; padding: 4vh; }
+    #err .big { font-size: 3.4vh; font-weight: 800; color: var(--bad); }
+    #err .sub { font-size: 2vh; color: var(--dim); max-width: 60ch; }
+    #err button { margin-top: 2vh; font: 700 2vh var(--font); padding: 1.4vh 3vh;
+      border: 0; border-radius: 1.2vh; background: var(--accent); color: #06222b; cursor: pointer; }
+
+    #hint { position: fixed; bottom: 3vh; right: 3vw; z-index: 5;
+      font-size: 1.6vh; color: rgba(255,255,255,0.28); font-weight: 600; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <div id="scoreBox" class="ov" style="display:none">
+    <div class="lbl">SCORE</div>
+    <div class="val" id="scoreVal">0</div>
+    <div class="best" id="bestVal">BEST 0</div>
+  </div>
+
+  <div id="livesBox" class="ov" style="display:none"></div>
+
+  <div id="connBox" class="ov"><span class="dot"></span><span id="connText">opening a room…</span></div>
+
+  <div id="lobby">
+    <h1><span class="g">Fruit Ninja</span> Online</h1>
+    <div class="card">
+      <img id="qrImg" alt="Scan to play" />
+      <div class="fallback" id="qrFallback"></div>
+    </div>
+    <div class="cap">Scan to grab the sword</div>
+    <div class="sub">room <b id="codeText">------</b></div>
+    <div class="url" id="urlText"></div>
+  </div>
+
+  <div id="ready">
+    <div class="big">Sword connected ⚔️</div>
+    <div class="sub" id="readySub">Tap <b>Play</b> on your phone to begin</div>
+  </div>
+
+  <div id="err">
+    <div class="big" id="errTitle">Could not open a room</div>
+    <div class="sub" id="errText"></div>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+
+  <div id="hint">space = start / restart</div>
+
+  <script type="module">
+    import { createGame } from "./ninja/engine.js";
+    import { createHost } from "./ninja/net.js";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const params = new URLSearchParams(location.search);
+    const MOUSE = params.get("mouse") === "1";   // dev: drive a sword with the mouse
+
+    // Declared before the game, because the engine publishes its first HUD
+    // synchronously while it is still being constructed.
+    let host = null;
+    let connected = false;
+    const slots = new Map();  // pid -> slot
+
+    // ---- the game runs whether or not a phone ever shows up -----------------
+    const game = createGame($("stage"), {
+      onHud: (hud) => {
+        $("scoreVal").textContent = hud.score;
+        $("bestVal").textContent = (hud.score >= hud.best ? "NEW BEST " : "BEST ") + hud.best;
+        renderLives(hud.lives);
+        host?.setHud(hud);
+      },
+      onState: (state) => {
+        const playing = state === "playing" || state === "countdown" || state === "over";
+        $("scoreBox").style.display = playing ? "block" : "none";
+        $("livesBox").style.display = playing ? "flex" : "none";
+        $("lobby").style.display = state === "lobby" && !connected ? "flex" : "none";
+        $("ready").style.display = state === "lobby" && connected ? "flex" : "none";
+        host?.setStatus(state === "countdown" ? "playing" : state);
+      },
+    });
+
+    function renderLives(lives) {
+      const box = $("livesBox");
+      if (box.children.length !== 3) {
+        box.innerHTML = "";
+        for (let i = 0; i < 3; i++) {
+          const d = document.createElement("div");
+          d.className = "x";
+          d.textContent = "✕";
+          box.appendChild(d);
+        }
+      }
+      [...box.children].forEach((el, i) => el.classList.toggle("spent", i >= lives));
+    }
+    renderLives(3);
+
+    // ---- the room ----------------------------------------------------------
+    function setConnected(on, text) {
+      connected = on;
+      $("connBox").classList.toggle("live", on);
+      $("connText").textContent = text;
+      const lobbyish = game.state === "lobby";
+      $("lobby").style.display = lobbyish && !on ? "flex" : "none";
+      $("ready").style.display = lobbyish && on ? "flex" : "none";
+    }
+
+    try {
+      host = await createHost({
+        onJoin(pid, slot) {
+          slots.set(pid, slot);
+          game.addPlayer(pid, slot);
+          setConnected(true, slots.size > 1 ? slots.size + " swords connected" : "sword connected");
+        },
+        onLeave(pid) {
+          slots.delete(pid);
+          game.removePlayer(pid);
+          if (slots.size === 0) {
+            setConnected(false, "sword disconnected — scan again");
+            // Nobody is holding a sword any more; there is no run to continue.
+            if (!MOUSE) game.lobby();
+          } else {
+            setConnected(true, slots.size + " swords connected");
+          }
+        },
+        // TRANSPORT: every blade sample the phone sends arrives here.
+        onBlade(pid, sample) {
+          game.input(pid, sample, slots.get(pid) || 0);
+        },
+        onCmd(pid, type) {
+          if (type === "start" && (game.state === "lobby" || game.state === "over")) game.start();
+          else if (type === "again" && game.state === "over") game.start();
+        },
+      });
+
+      $("codeText").textContent = host.code;
+      $("urlText").textContent = host.joinUrl;
+
+      // Same QR service PenDraw uses. The QR is the whole way in, so a blank
+      // white card is the worst possible failure: show it as loading, and if the
+      // request errors OR just never answers, put the URL in the card instead.
+      const qr = $("qrImg");
+      const fb = $("qrFallback");
+      let qrSettled = false;
+      const qrFallback = (msg) => {
+        if (qrSettled) return;
+        qrSettled = true;
+        qr.style.display = "none";
+        fb.style.display = "grid";
+        fb.innerHTML = '<div><b>Open this on your phone</b><br>' + esc(host.joinUrl) + "</div>";
+      };
+      fb.style.display = "grid";
+      fb.textContent = "loading QR…";
+      qr.style.display = "none";
+      qr.onload = () => { if (!qrSettled) { qrSettled = true; fb.style.display = "none"; qr.style.display = "block"; } };
+      qr.onerror = () => qrFallback();
+      setTimeout(() => qrFallback(), 6000);
+      qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=" + encodeURIComponent(host.joinUrl);
+      setConnected(false, "waiting for a phone");
+    } catch (e) {
+      $("err").style.display = "flex";
+      $("errText").textContent = e.message;
+    }
+
+    // ---- dev input: play the whole game with a mouse ------------------------
+    if (MOUSE) {
+      const MOUSE_PID = "mouse";
+      game.addPlayer(MOUSE_PID, 0);
+      setConnected(true, "mouse sword (dev)");
+      addEventListener("pointermove", (e) => {
+        game.inputLocal(MOUSE_PID, e.clientX / innerWidth, e.clientY / innerHeight);
+      });
+      $("hint").textContent = "mouse sword — space = start / restart";
+    }
+
+    // Read-only handle for tuning feel from the console and for smoke tests.
+    window.__ninja = { game, get host() { return host; }, get players() { return [...slots]; } };
+
+    addEventListener("keydown", (e) => {
+      if (e.code !== "Space") return;
+      e.preventDefault();
+      if (game.state === "lobby" || game.state === "over") game.start();
+    });
+  </script>
+</body>
+</html>
