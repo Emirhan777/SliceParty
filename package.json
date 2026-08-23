@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node tools/dev-server.mjs",
-    "tunnel": "npx --yes cloudflared tunnel --url http://localhost:3000",
+    "tunnel": "npx --yes cloudflared tunnel --url http://localhost:3000 --protocol http2",
+    "tunnel:quic": "npx --yes cloudflared tunnel --url http://localhost:3000",
     "test": "node tools/net-test.mjs"
   },
   "engines": { "node": ">=18" }

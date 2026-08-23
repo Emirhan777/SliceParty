@@ -35,6 +35,13 @@ iOS asks, hold the phone upright, and swing.
 The first `npm run tunnel` downloads the cloudflared binary, which takes a few
 seconds. No account, no signup. Leave both terminals running while you play.
 
+> `npm run tunnel` forces cloudflared's **HTTP/2** transport (TCP 7844) rather
+> than its default QUIC (UDP 7844), because plenty of university and corporate
+> networks drop outbound UDP on odd ports. The symptom if you ever hit it the
+> other way round is an endless loop of
+> `Failed to dial a quic connection ... no recent network activity`.
+> `npm run tunnel:quic` gives you the faster default if your network allows it.
+
 ### No phone? No tunnel?
 
 ```bash
