@@ -13,9 +13,10 @@
 //      tapering ribbon. That ribbon IS the visible sword, and its newest segment
 //      is exactly what the slicing test uses - so what you see is what cuts.
 
-const MAX_PREDICT_S = 0.12;   // never extrapolate further than this
-const SMOOTH_TAU_MS = 26;     // ~90% of the gap closed in 60ms
-const TRAIL_MS = 200;         // how much history the ribbon shows
+const MAX_PREDICT_S = 0.10;    // never extrapolate further ahead in time than this
+const MAX_PREDICT_DIST = 0.10; // ...nor further in distance, whatever the velocity says
+const SMOOTH_TAU_MS = 26;      // ~90% of the gap closed in 60ms
+const TRAIL_MS = 200;          // how much history the ribbon shows
 const TRAIL_MAX = 64;
 
 // Two slots, two looks. Slot 0 is the classic white-hot blade.
@@ -70,10 +71,18 @@ export function createBlade(slot = 0) {
       prev = { x: pos.x, y: pos.y };
       if (!seen) return;
 
-      // 1. predict
+      // 1. predict — but keep it on a leash. Extrapolation is only ever a guess,
+      // and a guess that can throw the blade across the screen is worse than the
+      // lag it was meant to hide.
       const age = Math.min((now - lastSampleAt) / 1000, MAX_PREDICT_S);
-      const px = target.x + target.vx * age;
-      const py = target.y + target.vy * age;
+      let ax = target.vx * age, ay = target.vy * age;
+      const reach = Math.hypot(ax, ay);
+      if (reach > MAX_PREDICT_DIST) {
+        const k = MAX_PREDICT_DIST / reach;
+        ax *= k; ay *= k;
+      }
+      const px = target.x + ax;
+      const py = target.y + ay;
 
       // 2. smooth (frame-rate independent exponential approach)
       const k = 1 - Math.exp(-(dt * 1000) / SMOOTH_TAU_MS);

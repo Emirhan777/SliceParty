@@ -80,7 +80,8 @@ When it's over, **slash the circle** to play again.
 | `ninja/fruits.js` | Procedural fruit, and halves clipped along the real slash line. |
 | `ninja/engine.js` | Game loop: spawning, physics, slicing, scoring, state. |
 | `tools/dev-server.mjs` | `npm start`. Dependency-free static server. |
-| `tools/net-test.mjs` | `npm test`. Round-trips the relay and checks the security rules. |
+| `tools/net-test.mjs` | `npm run test:net`. Round-trips the relay and checks the security rules. |
+| `tools/tilt-test.mjs` | `npm run test:tilt`. Measures blade stability against a smooth swing. |
 
 No build step. No bundler. Every file is loaded directly by the browser.
 
@@ -91,14 +92,30 @@ No build step. No bundler. Every file is loaded directly by the browser.
 Three problems sit between a phone's gyroscope and a blade that feels attached to
 your wrist, and each has its own answer:
 
-**Reach.** Orientation maps to an absolute point on screen, calibrated so that
-wherever you're pointing when you hit **Center** becomes the middle. The gains are
-set so a roughly 30° flick of the wrist sweeps the full width — a slash, not a
-body turn. The slider on the phone scales that to taste.
+**Which way is the phone pointing?** Not "what is alpha". The obvious approach
+reads alpha for x and beta for y, and it collapses the moment you hold the phone
+upright — which is exactly how you hold a sword. At beta = 90° alpha and gamma
+describe the same rotation, so the fusion trades one for the other and alpha
+alone stops meaning anything: a 1° wobble can swing it 10°, throwing the blade a
+third of the way across the screen. Instead the rotation matrix is rebuilt and
+asked where the *back of the phone* points. That's a vector; it moves smoothly,
+has no singularity anywhere you'd actually aim, and ignores the phone spinning in
+your hand. Its azimuth drives x, its elevation drives y. `npm run test:tilt`
+measures the difference: worst-case single-sample jump goes from 0.79 of the
+screen to 0.012.
+
+**Reach.** That pointing direction maps to an absolute point on screen,
+calibrated so wherever you're aiming when you hit **Center** becomes the middle.
+The gains are set so a roughly 33° flick of the wrist sweeps the full width — a
+slash, not a body turn. The slider on the phone scales that to taste.
 
 **Lag.** A Firebase round trip is 60–120ms. So the phone measures its own velocity
 and sends it with every sample, and the screen extrapolates the position forward
 by however long the packet actually took to arrive. Most of the delay disappears.
+Extrapolation is kept on a leash in both directions — a minimum baseline before
+differentiating, a ceiling on the velocity, and a cap on how far ahead the guess
+may throw the point — because a guess that flings the blade across the screen is
+worse than the lag it was hiding.
 
 **Jitter.** Samples arrive every ~20ms, frames render every ~16ms, and the two
 never line up. Each frame eases toward the predicted target rather than snapping

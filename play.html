@@ -218,16 +218,35 @@
         mode = "tilt";
         // If nothing arrives shortly, this device is not going to send anything.
         setTimeout(() => { if (mode === "tilt" && !gotOrient) useTouch("No motion sensor here"); }, 1500);
+        // And if plenty arrived but not one of them ever moved, the sensor is
+        // there in name only - a dead sword is worse than an honest fallback.
+        setTimeout(() => {
+          if (mode === "tilt" && orientSamples >= 8 && orientVariation === 0) useTouch("Motion sensor not responding");
+        }, 3000);
       } catch {
         useTouch("Motion not available");
       }
     }
 
     let gotOrient = false;
+    // Some devices deliver orientation events that never actually change - a
+    // sensor that is present but dead. Events alone are not proof of a working
+    // gyro, so also watch for the numbers moving: a real sensor always dithers,
+    // and total variation of exactly zero across seconds means nothing is there.
+    let orientSamples = 0, orientVariation = 0, lastRaw = null;
+
     function onOrient(e) {
       if (mode !== "tilt") return;
-      const s = tracker.push(e.alpha, e.beta);
+      // gamma matters as much as alpha here - see ninja/tilt.js. Feeding only
+      // alpha and beta is what made the blade jump when the phone was upright.
+      const s = tracker.push(e.alpha, e.beta, e.gamma);
       if (!s) return;
+
+      orientSamples++;
+      const raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (lastRaw) orientVariation += raw.reduce((t, v, i) => t + Math.abs(v - lastRaw[i]), 0);
+      lastRaw = raw;
+
       if (!gotOrient) { gotOrient = true; setConn(true, "tilt sword live"); }
       ctrl?.sendBlade(s);
     }
