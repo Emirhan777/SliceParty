@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Slice Party",
+    "slug": "slice-party",
+    "version": "1.0.0",
+    "scheme": "sliceparty",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.emirhansimsek.sliceparty",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Scan the game QR code to connect your sword to the big screen.",
+        "NSMotionUsageDescription": "Use your phone movement to swing your sword and slice fruit.",
+        "UIRequiresFullScreen": true
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan the game QR code to connect your sword to the big screen.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Use your phone movement to swing your sword and slice fruit."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "imageWidth": 140,
+          "backgroundColor": "#090d13"
+        }
+      ]
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4eca97f9-61ff-4b51-93eb-8b44fc913453"
+      }
+    },
+    "owner": "emirhansimsek_lightning"
+  }
+}

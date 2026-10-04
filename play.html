@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#07060f" />
-  <title>Fruit Ninja — Your Sword</title>
+  <title>Slice Party — Your Sword</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     :root {
@@ -68,8 +68,6 @@
     }
     button.act:active { background: rgba(255,255,255,0.18); }
     button.act.primary { background: var(--accent); color: #06222b; }
-    #sensWrap { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--dim); font-weight: 700; }
-    #sens { flex: 1; accent-color: var(--accent); height: 30px; }
 
     #conn { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dim); font-weight: 600; }
     #conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
@@ -81,8 +79,8 @@
 <body>
   <!-- 1. the gesture screen. iOS will not hand over motion data without it. -->
   <div class="screen on" id="intro">
-    <h1><span class="g">Fruit Ninja</span></h1>
-    <p class="muted">Hold your phone upright and swing it like a sword. Watch the big screen.</p>
+    <h1><span class="g">Slice Party</span></h1>
+    <p class="muted">Point your phone toward the big screen, tilted back so you can see its screen. Tap PLAY, allow motion, then swing left, right, up and down.</p>
     <button id="playBtn">PLAY</button>
     <p class="muted" id="introNote">room <b id="roomText">—</b></p>
   </div>
@@ -101,9 +99,9 @@
     </div>
 
     <div id="ctrlBottom">
-      <div id="sensWrap"><span>SLOW</span><input id="sens" type="range" min="0.5" max="2" step="0.05" /><span>FAST</span></div>
       <div class="row">
         <button class="act" id="centerBtn">Center</button>
+        <button class="act" id="motionBtn" style="display:none">Enable motion</button>
         <button class="act primary" id="againBtn">Play again</button>
       </div>
       <div id="conn"><span class="dot"></span><span id="connText">connecting…</span></div>
@@ -118,7 +116,8 @@
 
   <script type="module">
     import { createController } from "./ninja/net.js";
-    import { createTracker, SENS_MIN, SENS_MAX } from "./ninja/tilt.js";
+    import { createTracker } from "./ninja/tilt.js";
+    import { createPhoneMotion } from "./ninja/motion.js";
 
     const $ = (id) => document.getElementById(id);
     const show = (id) => ["intro", "ctrl", "fail"].forEach((s) => $(s).classList.toggle("on", s === id));
@@ -186,7 +185,7 @@
       const over = status === "over";
       $("againBtn").style.display = over ? "block" : "none";
       if (over) { $("bigMsg").textContent = "Run over"; $("smallMsg").textContent = "Slash the circle on the big screen, or tap below."; }
-      else if (status === "playing") { $("bigMsg").textContent = "Swing!"; $("smallMsg").textContent = "Your sword is on the big screen."; }
+      else if (status === "playing") { $("bigMsg").textContent = "Swing!"; $("smallMsg").textContent = mode === "touch" ? "Drag anywhere to swing." : "Swing your phone. Tap Center while aiming at the middle."; }
       else { $("bigMsg").textContent = "Ready"; $("smallMsg").textContent = "Swing to warm up — the run starts when you do."; }
     }
     paintStatus(null);
@@ -204,81 +203,32 @@
       paintStatus(lastStatus);
     };
 
-    async function enableTilt() {
-      // iOS 13+ hands out motion only from inside a user gesture, and only over
-      // HTTPS. On http://<lan-ip> no event ever fires, which is exactly what the
-      // touch fallback below is for.
-      try {
-        if (typeof DeviceOrientationEvent !== "undefined" &&
-            typeof DeviceOrientationEvent.requestPermission === "function") {
-          const res = await DeviceOrientationEvent.requestPermission();
-          if (res !== "granted") return useTouch("Motion access denied");
-        }
-        addEventListener("deviceorientation", onOrient);
-        mode = "tilt";
-        // If nothing arrives shortly, this device is not going to send anything.
-        setTimeout(() => { if (mode === "tilt" && !gotOrient) useTouch("No motion sensor here"); }, 1500);
-        // And if plenty arrived but not one of them ever moved, the sensor is
-        // there in name only - a dead sword is worse than an honest fallback.
-        setTimeout(() => {
-          if (mode === "tilt" && orientSamples >= 8 && orientVariation === 0) useTouch("Motion sensor not responding");
-        }, 3000);
-      } catch {
-        useTouch("Motion not available");
-      }
-    }
+    const phoneMotion = createPhoneMotion({
+      tracker,
+      onSample: sample => ctrl?.sendBlade(sample),
+      onMode(next, message) {
+        mode = next;
+        $("modeTag").textContent = next === "touch" ? "TOUCH" : next === "waiting" ? "CONNECTING MOTION" : "SWORD";
+        $("motionBtn").style.display = next === "touch" ? "block" : "none";
+        setConn(next === "motion", message);
+        paintStatus(lastStatus);
+      },
+    });
+    function enableTilt() { return phoneMotion.start(); }
+    $("motionBtn").onclick = () => phoneMotion.start();
 
-    let gotOrient = false;
-    // Some devices deliver orientation events that never actually change - a
-    // sensor that is present but dead. Events alone are not proof of a working
-    // gyro, so also watch for the numbers moving: a real sensor always dithers,
-    // and total variation of exactly zero across seconds means nothing is there.
-    let orientSamples = 0, orientVariation = 0, lastRaw = null;
-
-    function onOrient(e) {
-      if (mode !== "tilt") return;
-      // gamma matters as much as alpha here - see ninja/tilt.js. Feeding only
-      // alpha and beta is what made the blade jump when the phone was upright.
-      const s = tracker.push(e.alpha, e.beta, e.gamma);
-      if (!s) return;
-
-      orientSamples++;
-      const raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
-      if (lastRaw) orientVariation += raw.reduce((t, v, i) => t + Math.abs(v - lastRaw[i]), 0);
-      lastRaw = raw;
-
-      if (!gotOrient) { gotOrient = true; setConn(true, "tilt sword live"); }
-      ctrl?.sendBlade(s);
-    }
-
-    // ---- fallback: drag anywhere on the phone -------------------------------
-    // Also how you test the whole relay from a second desktop tab.
-    function useTouch(why) {
-      if (mode === "touch") return;
-      if (mode === "tilt") removeEventListener("deviceorientation", onOrient);
-      mode = "touch";
-      $("modeTag").textContent = "TOUCH";
-      $("smallMsg").textContent = "Drag anywhere to swing.";
-      setConn(true, why + " — drag to swing");
-      $("sensWrap").style.display = "none";
-
-      const send = (e) => {
-        const s = tracker.pushPoint(e.clientX / innerWidth, e.clientY / innerHeight);
-        ctrl?.sendBlade(s);
-      };
-      let down = false;
-      addEventListener("pointerdown", (e) => { down = true; send(e); });
-      addEventListener("pointermove", (e) => { if (down) send(e); });
-      addEventListener("pointerup", () => { down = false; });
-      addEventListener("pointercancel", () => { down = false; });
-    }
+    // Register touch once; late sensor data can safely switch back to motion.
+    let touchDown = false;
+    const sendTouch = e => ctrl?.sendBlade(tracker.pushPoint(e.clientX / innerWidth, e.clientY / innerHeight));
+    addEventListener("pointerdown", e => {
+      if (mode !== "touch" || e.target.closest("button, input")) return;
+      touchDown = true; sendTouch(e);
+    });
+    addEventListener("pointermove", e => { if (mode === "touch" && touchDown) sendTouch(e); });
+    addEventListener("pointerup", () => { touchDown = false; });
+    addEventListener("pointercancel", () => { touchDown = false; });
 
     // ---- controls -----------------------------------------------------------
-    const sens = $("sens");
-    sens.min = SENS_MIN; sens.max = SENS_MAX;
-    sens.value = tracker.sensitivity;
-    sens.oninput = () => { tracker.sensitivity = parseFloat(sens.value); tracker.center(); };
-
     $("centerBtn").onclick = () => { tracker.center(); ctrl?.sendCmd("center"); };
     $("againBtn").onclick = () => ctrl?.sendCmd("again");
     $("againBtn").style.display = "none";
@@ -300,7 +250,7 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") { keepAwake(); tracker.center(); }
     });
-    addEventListener("pagehide", () => ctrl?.destroy());
+    addEventListener("pagehide", () => { phoneMotion.stop(); ctrl?.destroy(); });
   </script>
 </body>
 </html>

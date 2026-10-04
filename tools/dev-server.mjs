@@ -48,7 +48,7 @@ createServer(async (req, res) => {
   const lan = Object.values(networkInterfaces()).flat()
     .filter((n) => n && n.family === "IPv4" && !n.internal)
     .map((n) => n.address);
-  console.log("\n  Fruit Ninja Online\n");
+  console.log("\n  Slice Party\n");
   console.log("  big screen   http://localhost:" + PORT + "/");
   console.log("  mouse sword  http://localhost:" + PORT + "/?mouse=1");
   for (const ip of lan) console.log("  on this wifi http://" + ip + ":" + PORT + "/   (phone = touch only, no tilt)");

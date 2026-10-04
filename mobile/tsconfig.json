@@ -1,0 +1,23 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "types": [
+      "node",
+      "react"
+    ]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../ninja/tilt.js",
+    "../ninja/launch.js",
+    "../firebase-config.js"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

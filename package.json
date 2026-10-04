@@ -1,5 +1,5 @@
 {
-  "name": "fruit-ninja-online",
+  "name": "slice-party",
   "version": "1.0.0",
   "private": true,
   "description": "Swing your phone like a sword and slice fruit on a big screen. Static site, no build step, no server of your own.",
@@ -8,9 +8,13 @@
     "start": "node tools/dev-server.mjs",
     "tunnel": "npx --yes cloudflared tunnel --url http://localhost:3000 --protocol http2",
     "tunnel:quic": "npx --yes cloudflared tunnel --url http://localhost:3000",
-    "test": "node tools/tilt-test.mjs && node tools/net-test.mjs",
+    "test": "node tools/tilt-test.mjs && node tools/motion-test.mjs && node tools/net-test.mjs && node tools/launch-test.mjs",
+    "test:motion": "node tools/motion-test.mjs",
     "test:tilt": "node tools/tilt-test.mjs",
-    "test:net": "node tools/net-test.mjs"
+    "test:net": "node tools/net-test.mjs",
+    "ios": "npm --prefix mobile start",
+    "ios:tunnel": "npm --prefix mobile run start:tunnel",
+    "build:site": "node tools/build-site.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -1,21 +1,7 @@
-// The sword: how a jittery, laggy stream of phone samples becomes a point that
-// feels like it is attached to your wrist.
-//
-// Three things happen between the network and the pixel:
-//
-//   1. PREDICT. Every sample carries the velocity the phone measured. The screen
-//      pushes the position forward by however long the sample took to arrive, so
-//      the blade sits where the phone IS rather than where it was ~80ms ago.
-//   2. SMOOTH. Samples land every ~20ms, frames every ~16ms, and the gap is never
-//      even. Each frame eases toward the predicted target instead of snapping,
-//      which turns packet jitter into a slight weight.
-//   3. TRAIL. Rendered positions go into a short ring buffer and are drawn as a
-//      tapering ribbon. That ribbon IS the visible sword, and its newest segment
-//      is exactly what the slicing test uses - so what you see is what cuts.
-
-const MAX_PREDICT_S = 0.10;    // never extrapolate further ahead in time than this
-const MAX_PREDICT_DIST = 0.10; // ...nor further in distance, whatever the velocity says
-const SMOOTH_TAU_MS = 26;      // ~90% of the gap closed in 60ms
+// Screen movement copied from HarryPotterSpells: ease toward the latest real
+// phone point with a 16ms time constant. Keep Slice Party's trail and collision
+// segment, so the visible sword is also the segment that cuts fruit.
+const SMOOTH_TAU_MS = 16;
 const TRAIL_MS = 200;          // how much history the ribbon shows
 const TRAIL_MAX = 64;
 
@@ -46,14 +32,14 @@ export function createBlade(slot = 0) {
     get idle() { return performance.now() - lastSampleAt > 900; },
 
     // A sample straight off the wire.
-    feed({ x, y, vx = 0, vy = 0 }) {
-      target = { x, y, vx, vy };
-      lastSampleAt = performance.now();
+    feed({ x, y }, now = performance.now()) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      target = { x, y, vx: 0, vy: 0 };
+      lastSampleAt = now;
       if (!seen) { seen = true; pos = { x, y }; prev = { x, y }; }
     },
 
-    // Local input (mouse on the screen, or the touch fallback) skips prediction:
-    // there is no lag to hide.
+    // Local input follows the same easing as phone input.
     feedDirect(x, y) {
       target = { x, y, vx: 0, vy: 0 };
       lastSampleAt = performance.now();
@@ -71,27 +57,16 @@ export function createBlade(slot = 0) {
       prev = { x: pos.x, y: pos.y };
       if (!seen) return;
 
-      // 1. predict — but keep it on a leash. Extrapolation is only ever a guess,
-      // and a guess that can throw the blade across the screen is worse than the
-      // lag it was meant to hide.
-      const age = Math.min((now - lastSampleAt) / 1000, MAX_PREDICT_S);
-      let ax = target.vx * age, ay = target.vy * age;
-      const reach = Math.hypot(ax, ay);
-      if (reach > MAX_PREDICT_DIST) {
-        const k = MAX_PREDICT_DIST / reach;
-        ax *= k; ay *= k;
-      }
-      const px = target.x + ax;
-      const py = target.y + ay;
-
-      // 2. smooth (frame-rate independent exponential approach)
+      // HarryPotterSpells' easing: never move beyond the last measured point.
+      const px = target.x, py = target.y;
+      // Frame-rate independent exponential approach.
       const k = 1 - Math.exp(-(dt * 1000) / SMOOTH_TAU_MS);
       pos = {
         x: pos.x + (Math.min(Math.max(px, 0), 1) - pos.x) * k,
         y: pos.y + (Math.min(Math.max(py, 0), 1) - pos.y) * k,
       };
 
-      // 3. trail
+      // Trail
       trail.push({ x: pos.x, y: pos.y, t: now });
       while (trail.length && now - trail[0].t > TRAIL_MS) trail.shift();
       while (trail.length > TRAIL_MAX) trail.shift();

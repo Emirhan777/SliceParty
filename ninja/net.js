@@ -6,13 +6,13 @@
 // change to ONE file. Look for the "TRANSPORT:" markers.
 //
 // Wire format, under rooms/{code} (the only tree firebase-rules.json lets us
-// write to, so PenDraw and Fruit Ninja share it - game:"ninja" tells them apart):
+// write to, so PenDraw and Slice Party share it - game:"ninja" tells them apart):
 //
 //   game:          "ninja"
 //   status:        "lobby" | "playing" | "over"
 //   createdAt:     serverTimestamp()
 //   players/{pid}: { joinedAt, slot }        slot 0|1 -> blade colour
-//   input/{pid}:   { x, y, vx, vy, t }       set() ~50Hz, OVERWRITTEN not appended
+//   input/{pid}:   { x, y, vx, vy, t }       set() ~33Hz, OVERWRITTEN not appended
 //   cmd/{pid}:     { type, at }              "start" | "again" | "center"
 //   hud:           { score, best, lives, combo, status }
 //
@@ -23,46 +23,45 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getDatabase, ref, get, set, remove, onValue, onChildAdded, onChildChanged,
-  onChildRemoved, onDisconnect, serverTimestamp,
+  onChildRemoved, onDisconnect, serverTimestamp, runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { claimLaunch } from "./launch.js";
 import { firebaseConfig } from "../firebase-config.js";
 
 const db = getDatabase(getApps().length ? getApp() : initializeApp(firebaseConfig));
-
 export const MAX_SLOTS = 2;                     // one phone today, two tomorrow
 const HUD_MIN_MS = 200;                         // screen -> phone, ~5Hz is plenty
-const BLADE_MIN_MS = 20;                        // phone -> screen, cap at ~50Hz
+const BLADE_MIN_MS = 30;                        // phone -> screen, match HarryPotterSpells, ~33Hz
 const BLADE_KEEPALIVE_MS = 250;                 // resend even when perfectly still
 
 const newPid = () => "p_" + Math.random().toString(36).slice(2, 10);
 
-// Find an unused room code.
-//
-// Reading only `createdAt` keeps this to a few bytes. Reading the whole room
-// would drag down every other app sharing this database - PenDraw rooms carry a
-// full drawing history - and enumerating all of `rooms/` to garbage-collect
-// would be worse still, as well as risking deleting a room that is not ours.
-// A code collision is a 1-in-900,000 event: just pick another one. Stale rooms
-// are a few dozen bytes and harm nothing.
-async function freeCode() {
+// Reserve a code atomically so simultaneous visitors cannot overwrite a room.
+async function reserveRoom() {
   for (let i = 0; i < 20; i++) {
-    const c = String(Math.floor(100000 + Math.random() * 900000));
-    if (!(await get(ref(db, "rooms/" + c + "/createdAt"))).exists()) return c;
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const result = await runTransaction(ref(db, "rooms/" + code), current => current === null
+      ? { game: "ninja", status: "lobby", createdAt: serverTimestamp() } : undefined, { applyLocally: false });
+    if (result.committed) return code;
   }
-  return String(Date.now()).slice(-6);
+  throw new Error("Could not create a room. Please try again.");
 }
 
 // ---------------------------------------------------------------------------
 // HOST - the big screen. Owns the room and the game state.
 // ---------------------------------------------------------------------------
-export async function createHost({ onJoin, onLeave, onBlade, onCmd } = {}) {
-  const code = await freeCode();
+export async function createHost({ onJoin, onLeave, onBlade, onCmd, launch } = {}) {
+  if (launch && (!/^\d{6}$/.test(launch.code) || !/^[a-f0-9]{32}$/.test(launch.token))) throw new Error("Invalid room link. Create a new one in the app.");
+  const code = launch ? launch.code : await reserveRoom();
   const base = "rooms/" + code;
   const room = ref(db, base);
-  await set(room, { game: "ninja", status: "lobby", createdAt: serverTimestamp() });
+  if (launch) {
+    const result = await runTransaction(room, value => value === null ? null : claimLaunch(value, launch.token), { applyLocally: false });
+    if (!result.committed || !result.snapshot.exists()) throw new Error("This room link expired, was cancelled, or is already open on another screen. Create a new one in the app.");
+  }
   // Self-deleting room: when this tab closes, refreshes or drops its connection,
   // Firebase removes the whole thing. Abandoned rooms never accumulate.
-  onDisconnect(room).remove();
+  await onDisconnect(room).remove();
 
   const offs = [];
   const players = new Map(); // pid -> slot
@@ -79,7 +78,12 @@ export async function createHost({ onJoin, onLeave, onBlade, onCmd } = {}) {
 
   // TRANSPORT: this pair of listeners is the blade stream. A WebRTC datachannel
   // would replace exactly these two lines, calling onBlade() with the same shape.
-  const blade = (s) => { const v = s.val(); if (v && typeof v.x === "number") onBlade?.(s.key, v); };
+  const blade = (s) => {
+    const v = s.val();
+    if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) {
+      onBlade?.(s.key, v);
+    }
+  };
   offs.push(onChildAdded(ref(db, base + "/input"), blade));
   offs.push(onChildChanged(ref(db, base + "/input"), blade));
 
@@ -132,16 +136,21 @@ export async function createController(code, { onHud, onStatus, onClosed } = {})
   const snap = await get(ref(db, base));
   if (!snap.exists()) throw new Error("That game is over. Scan the QR on the screen again.");
   const room = snap.val();
-  if (room.game && room.game !== "ninja") throw new Error("That code belongs to a different game.");
+  if (room.status === "waiting-screen") throw new Error("Open the shared room link on the big screen first.");
+  if (room.game !== "ninja") throw new Error("That code belongs to a different game.");
 
-  // Claim the lowest free slot. Slot decides the blade colour on the big screen.
-  const taken = new Set(Object.values(room.players || {}).map((p) => p?.slot));
-  let slot = 0;
-  while (taken.has(slot) && slot < MAX_SLOTS) slot++;
-  if (slot >= MAX_SLOTS) throw new Error("This game already has all its players.");
-
+  // Atomically allocate the two sword slots, including simultaneous joins.
   const pid = newPid();
-  await set(ref(db, base + "/players/" + pid), { joinedAt: serverTimestamp(), slot });
+  const claim = await runTransaction(ref(db, base + "/players"), players => {
+    const current = players || {};
+    const taken = new Set(Object.values(current).map(p => p?.slot));
+    let slot = 0;
+    while (taken.has(slot) && slot < MAX_SLOTS) slot++;
+    if (slot >= MAX_SLOTS) return undefined;
+    return { ...current, [pid]: { joinedAt: serverTimestamp(), slot } };
+  }, { applyLocally: false });
+  if (!claim.committed) throw new Error("This game already has all its players.");
+  const slot = claim.snapshot.val()[pid].slot;
   // Leave nothing behind when this phone locks, closes or wanders off wifi.
   onDisconnect(ref(db, base + "/players/" + pid)).remove();
   onDisconnect(ref(db, base + "/input/" + pid)).remove();
@@ -168,7 +177,7 @@ export async function createController(code, { onHud, onStatus, onClosed } = {})
       if (since < BLADE_MIN_MS) return false;
       // Perfectly still? Still tick occasionally, so the screen can tell the
       // difference between "not moving" and "phone fell off the network".
-      const moved = Math.abs(x - lastX) + Math.abs(y - lastY) > 0.0015;
+      const moved = Math.hypot(x - lastX, y - lastY) >= 0.005;
       if (!moved && since < BLADE_KEEPALIVE_MS) return false;
       lastAt = now; lastX = x; lastY = y;
       set(inputRef, { x, y, vx, vy, t: Date.now() }).catch(() => {});

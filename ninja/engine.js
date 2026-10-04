@@ -557,7 +557,7 @@ export function createGame(canvas, { onHud, onState } = {}) {
     hasPlayer(pid) { return blades.has(pid); },
     get playerCount() { return blades.size; },
 
-    // A sample off the wire: carries velocity, so it gets extrapolated.
+    // A measured phone point: ease toward it using HarryPotterSpells' mechanism.
     input(pid, sample, slot = 0) { ensureBlade(pid, slot).feed(sample); },
     // Local input (the screen's own mouse): no lag, no prediction.
     inputLocal(pid, x, y, slot = 0) { ensureBlade(pid, slot).feedDirect(x, y); },

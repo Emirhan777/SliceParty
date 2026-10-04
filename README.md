@@ -1,4 +1,8 @@
-# Fruit Ninja Online
+# Slice Party
+
+**Play online: https://emirhan777.github.io/SliceParty/**
+
+Every browser tab opens its own room. Use **New room** to start a fresh one. No player account is needed. In the iPhone app, choose **Create a room**, create a room link, and share or copy it to a computer or TV. Confirm **Open game on this screen** there, then return to the app: your sword connects automatically. Pending links expire after ten minutes and work on one screen.
 
 Put a screen up, scan the QR with your phone, and the phone becomes a sword.
 Tilt it and a glowing blade sweeps across the screen, cutting fruit in half along
@@ -6,13 +10,18 @@ the exact line you swung.
 
 No app to install, no account, no name to type. Scan and swing.
 
+An optional native iPhone controller is now in [`mobile/`](mobile/README.md).
+It uses the same motion tracker, scans the game QR, and shows your score/lives.
+Run `npm run ios:tunnel` to preview it in Expo Go; standalone iOS build instructions
+are in the mobile README.
+
 ```
  📱 play.html (phone, tilt) ──blade coords──▶ 🔥 Firebase RTDB ◀──listen── 🖥️ index.html (big screen)
 ```
 
 ---
 
-## Try it on your iPhone
+## Local development
 
 Motion sensors only work over **https**, so a plain `http://192.168.…` address
 will not do — iOS silently sends no motion data at all. Two terminals:
@@ -30,7 +39,7 @@ The second command prints a URL like `https://something-random.trycloudflare.com
 whatever address the page is served from, so it has to be the https one.
 
 Then scan the QR with your iPhone camera, tap **PLAY**, allow motion access when
-iOS asks, hold the phone upright, and swing.
+iOS asks, hold the phone tilted back so you can see its screen, and swing.
 
 The first `npm run tunnel` downloads the cloudflared binary, which takes a few
 seconds. No account, no signup. Leave both terminals running while you play.
@@ -76,12 +85,14 @@ When it's over, **slash the circle** to play again.
 | `firebase-config.js` | Firebase keys — the only file to edit to move to your own project. |
 | `ninja/net.js` | The transport seam. The only file that imports Firebase. |
 | `ninja/tilt.js` | Phone orientation → a point on the screen. |
+| `ninja/motion.js` | Orientation permission, touch fallback, and recovery. |
 | `ninja/blade.js` | Prediction, smoothing, and the trail that does the cutting. |
 | `ninja/fruits.js` | Procedural fruit, and halves clipped along the real slash line. |
 | `ninja/engine.js` | Game loop: spawning, physics, slicing, scoring, state. |
 | `tools/dev-server.mjs` | `npm start`. Dependency-free static server. |
 | `tools/net-test.mjs` | `npm run test:net`. Round-trips the relay and checks the security rules. |
 | `tools/tilt-test.mjs` | `npm run test:tilt`. Measures blade stability against a smooth swing. |
+| `tools/motion-test.mjs` | `npm run test:motion`. Checks mapping, sensor startup, recovery, and screen easing. |
 
 No build step. No bundler. Every file is loaded directly by the browser.
 
@@ -89,37 +100,24 @@ No build step. No bundler. Every file is loaded directly by the browser.
 
 ## How the sword works
 
-Three problems sit between a phone's gyroscope and a blade that feels attached to
-your wrist, and each has its own answer:
+The controller uses the phone-to-screen movement mechanism from HarryPotterSpells:
 
-**Which way is the phone pointing?** Not "what is alpha". The obvious approach
-reads alpha for x and beta for y, and it collapses the moment you hold the phone
-upright — which is exactly how you hold a sword. At beta = 90° alpha and gamma
-describe the same rotation, so the fusion trades one for the other and alpha
-alone stops meaning anything: a 1° wobble can swing it 10°, throwing the blade a
-third of the way across the screen. Instead the rotation matrix is rebuilt and
-asked where the *back of the phone* points. That's a vector; it moves smoothly,
-has no singularity anywhere you'd actually aim, and ignores the phone spinning in
-your hand. Its azimuth drives x, its elevation drives y. `npm run test:tilt`
-measures the difference: worst-case single-sample jump goes from 0.79 of the
-screen to 0.012.
+The motion tracker is copied directly from `HarryPotterSpells/game/tilt.js`.
+Point your phone toward the big screen, tilted back so you can see its screen,
+then tap **PLAY** and allow motion. Tap **Center** while aiming at the middle.
+Turn left/right or tip up/down to swing the sword, just like the wand controls.
 
-**Reach.** That pointing direction maps to an absolute point on screen,
-calibrated so wherever you're aiming when you hit **Center** becomes the middle.
-The gains are set so a roughly 33° flick of the wrist sweeps the full width — a
-slash, not a body turn. The slider on the phone scales that to taste.
+**Phone mapping.** Heading (alpha) controls x, pitch (beta) controls y. The pose
+at PLAY or Center is the middle. A 112-degree turn covers the width; a 60-degree
+tip covers the height. These are the source project's fixed gains. There is no
+sensitivity slider, rotation-matrix mapping, velocity estimation, or prediction.
+Avoid holding the phone dead upright; use the tilted posture from that project.
 
-**Lag.** A Firebase round trip is 60–120ms. So the phone measures its own velocity
-and sends it with every sample, and the screen extrapolates the position forward
-by however long the packet actually took to arrive. Most of the delay disappears.
-Extrapolation is kept on a leash in both directions — a minimum baseline before
-differentiating, a ceiling on the velocity, and a cap on how far ahead the guess
-may throw the point — because a guess that flings the blade across the screen is
-worse than the lag it was hiding.
-
-**Jitter.** Samples arrive every ~20ms, frames render every ~16ms, and the two
-never line up. Each frame eases toward the predicted target rather than snapping
-to it, which turns uneven packet timing into a slight, pleasant weight.
+**Transport and display.** Match HarryPotterSpells' cadence: send at most every
+30ms, with a 0.005-screen movement threshold and periodic keepalives. The screen
+uses the same 16ms easing toward the latest received point. It never extrapolates
+beyond the measured phone position. If motion is unavailable, drag to swing or
+tap **Enable motion** to retry. Late sensor data restores motion automatically.
 
 The visible trail is a ring buffer of the last 200ms of *rendered* positions, and
 its newest segment is exactly what the slicing test uses — so what you see is what
@@ -146,7 +144,7 @@ Everything lives under `rooms/{6-digit code}`:
 game:          "ninja"
 status:        "lobby" | "playing" | "over"
 players/{pid}: { joinedAt, slot }      # slot 0|1 -> blade colour
-input/{pid}:   { x, y, vx, vy, t }     # set() ~50Hz, overwritten, never grows
+input/{pid}:   { x, y, vx, vy, t }     # set() ~33Hz, overwritten, never grows
 cmd/{pid}:     { type, at }            # "start" | "again" | "center"
 hud:           { score, best, lives, combo, status }
 ```
@@ -159,7 +157,7 @@ phone removes its own nodes when it disconnects.
 
 > **The Firebase project is shared** with an older project (PenDraw) that also
 > writes under `rooms/`. That's why this app never enumerates or garbage-collects
-> that tree — it reads a single `createdAt` field to pick a free code and leaves
+> that tree — it atomically reserves a randomly chosen code and leaves
 > everything else alone. `firebase-rules.json` is the rule set both rely on; it
 > only permits writes under `rooms/{6 digits}`. To move onto your own Firebase
 > project, edit `firebase-config.js` and publish `firebase-rules.json` to it.
@@ -172,8 +170,19 @@ phone scanning the same QR gets a pink sword.
 
 ## Deploy
 
-Push to GitHub → **Settings → Pages → deploy from the repo root**. `index.html` is
-the big screen, and the QR resolves `play.html` against whatever URL the page is
-served from, so localhost, a LAN IP, a tunnel and Pages all work unchanged.
+The public game is hosted on GitHub Pages from the `gh-pages` branch of
+[Emirhan777/SliceParty](https://github.com/Emirhan777/SliceParty). Run
+`npm run build:site` to prepare the browser files in `dist/site`, then publish
+that directory to the deployment branch. Native sources, environment files,
+and build archives are excluded from the website.
 
-Pages is https, so tilt works there with no tunnel.
+GitHub Pages provides HTTPS without a running development computer. Firebase
+provides live rooms using the existing database and rules. No paid hosting or
+billing upgrade is required by this setup. Firebase's Spark plan is limited to
+100 simultaneous connections, 1 GB stored, and 10 GB/month downloaded, shared
+across all apps using that project. Pending app links expire after ten minutes;
+normal app cancellation removes them, and screen-owned rooms delete on disconnect.
+Abruptly terminated apps can leave small expired reservations, which cannot be claimed.
+
+References: [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits),
+[Firebase pricing](https://firebase.google.com/pricing).

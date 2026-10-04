@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Fruit Ninja Online — Big Screen</title>
+  <title>Slice Party — Big Screen</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -74,10 +74,21 @@
 
     #hint { position: fixed; bottom: 3vh; right: 3vw; z-index: 5;
       font-size: 1.6vh; color: rgba(255,255,255,0.28); font-weight: 600; pointer-events: none; }
+    #launchScreen { position: fixed; inset: 0; z-index: 20; display: none; place-content: center; gap: 24px; padding: 32px; text-align: center; background: #090d13; }
+    #launchScreen h1 { font-size: clamp(30px, 5vw, 56px); color: #d8fc65; }
+    #launchScreen p { max-width: 560px; line-height: 1.6; color: #aab4c2; }
+    #launchConfirm, #newRoom { border: 0; border-radius: 14px; padding: 16px 24px; background: #d8fc65; color: #162108; font: 800 16px var(--font); cursor: pointer; }
+    #newRoom { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 8; padding: 10px 18px; font-size: 13px; }
   </style>
 </head>
 <body>
   <canvas id="stage"></canvas>
+  <button id="newRoom" type="button">New room</button>
+  <section id="launchScreen" aria-labelledby="launchTitle">
+    <h1 id="launchTitle">Slice Party on the big screen.</h1>
+    <p>Open this room here and return to the app on your phone. Your sword will connect automatically.</p>
+    <button id="launchConfirm" type="button">Open game on this screen</button>
+  </section>
 
   <div id="scoreBox" class="ov" style="display:none">
     <div class="lbl">SCORE</div>
@@ -90,7 +101,7 @@
   <div id="connBox" class="ov"><span class="dot"></span><span id="connText">opening a room…</span></div>
 
   <div id="lobby">
-    <h1><span class="g">Fruit Ninja</span> Online</h1>
+    <h1><span class="g">Slice Party</span></h1>
     <div class="card">
       <img id="qrImg" alt="Scan to play" />
       <div class="fallback" id="qrFallback"></div>
@@ -116,6 +127,7 @@
   <script type="module">
     import { createGame } from "./ninja/engine.js";
     import { createHost } from "./ninja/net.js";
+    import { parseLaunch } from "./ninja/launch.js";
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -171,8 +183,21 @@
       $("ready").style.display = lobbyish && on ? "flex" : "none";
     }
 
+    $("newRoom").onclick = () => {
+      host?.destroy();
+      location.replace(location.pathname + location.search);
+    };
     try {
+      const launch = parseLaunch(location.hash);
+      if (location.hash.startsWith('#launch=') && !launch) throw new Error("Invalid room link. Create a new one in the Slice Party app.");
+      if (launch) {
+        $("launchScreen").style.display = "grid";
+        await new Promise(resolve => { $("launchConfirm").onclick = resolve; });
+        $("launchConfirm").disabled = true;
+        $("launchConfirm").textContent = "Opening your room?";
+      }
       host = await createHost({
+        launch,
         onJoin(pid, slot) {
           slots.set(pid, slot);
           game.addPlayer(pid, slot);
@@ -199,6 +224,8 @@
         },
       });
 
+      $("launchScreen").style.display = "none";
+      if (launch) history.replaceState(null, '', location.pathname + location.search);
       $("codeText").textContent = host.code;
       $("urlText").textContent = host.joinUrl;
 
@@ -222,8 +249,9 @@
       qr.onerror = () => qrFallback();
       setTimeout(() => qrFallback(), 6000);
       qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=" + encodeURIComponent(host.joinUrl);
-      setConnected(false, "waiting for a phone");
+      setConnected(slots.size > 0, slots.size ? "sword connected" : "waiting for a phone");
     } catch (e) {
+      $("launchScreen").style.display = "none";
       $("err").style.display = "flex";
       $("errText").textContent = e.message;
     }

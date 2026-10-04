@@ -1,5 +1,5 @@
 // ============================================================================
-//  FIREBASE CONFIG — Fruit Ninja Online
+//  FIREBASE CONFIG — Slice Party
 // ----------------------------------------------------------------------------
 //  This Realtime Database is shared with an older project (PenDraw), which is
 //  why the game works with zero setup. Rooms from both live under
@@ -7,7 +7,7 @@
 //  enumerates or garbage-collects that tree, so the two cannot disturb each
 //  other.
 //
-//  To move Fruit Ninja onto its own Firebase project later, edit ONLY this file:
+//  To move Slice Party onto its own Firebase project later, edit ONLY this file:
 //    1. https://console.firebase.google.com -> Add project (free)
 //    2. Click the </> "Web" icon to register a web app, copy its config here
 //    3. Realtime Database -> Create Database -> then publish firebase-rules.json

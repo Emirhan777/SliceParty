@@ -2,3 +2,11 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+mobile/.expo/
+mobile/dist/
+mobile/.env.local
+mobile/credentials.json
+mobile/*.ipa
+mobile/*.p12
+mobile/*.mobileprovision
+dist/
