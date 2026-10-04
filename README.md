@@ -2,6 +2,10 @@
 
 **Play online: https://emirhan777.github.io/SliceParty/**
 
+[Help and support](https://emirhan777.github.io/SliceParty/support.html) ? [Privacy policy](https://emirhan777.github.io/SliceParty/privacy.html)
+
+App Store release status and assets: [`mobile/APP-STORE.md`](mobile/APP-STORE.md).
+
 Every browser tab opens its own room. Use **New room** to start a fresh one. No player account is needed. In the iPhone app, choose **Create a room**, create a room link, and share or copy it to a computer or TV. Confirm **Open game on this screen** there, then return to the app: your sword connects automatically. Pending links expire after ten minutes and work on one screen.
 
 Put a screen up, scan the QR with your phone, and the phone becomes a sword.
