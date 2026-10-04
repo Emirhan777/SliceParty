@@ -10,3 +10,9 @@ mobile/*.ipa
 mobile/*.p12
 mobile/*.mobileprovision
 dist/
+.release/
+mobile/artifacts/
+mobile/store.local.json
+mobile/*.p8
+mobile/ios/
+mobile/android/

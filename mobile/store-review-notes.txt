@@ -1,0 +1,11 @@
+Slice Party is a native motion/touch controller for its companion browser game. No login or purchases are required. The iPhone is the controller; a separate computer or TV browser displays the game.
+
+1. Open https://emirhan777.github.io/SliceParty/ on a computer and leave it open. A free room is created automatically.
+2. On the iPhone, select Scan game QR and grant Camera permission, or type the six-digit room code and tap Join.
+3. Select Motion sword and allow Motion access, or select Touch sword to test without sensors.
+4. Tap Start game. Swing with small movements or drag on the touch pad. Watch the fruit and sword on the computer. Center sword resets the aim.
+5. After a round, tap Play again. Up to two phones can join each room.
+
+To test creating a room from the app, choose Create a room, then Create room link. Copy or share the link to a computer, open it there, and confirm Open game on this screen. Return to the app; it connects automatically. Links expire after ten minutes and work on one screen.
+
+The camera only decodes QR codes locally. Raw motion sensor data stays on the phone; derived sword coordinates and game state use Firebase. There are no ads, analytics SDK, purchases, accounts, chat, or user-generated text. Privacy and support links are on the home screen. The phone and computer may use different internet connections. Native haptics and motion controls require a physical device; touch controls work in a simulator.

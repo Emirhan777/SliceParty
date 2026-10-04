@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, type GestureResponderEvent } from 'react-native';
+import { ActivityIndicator, AppState, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, type GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -218,6 +218,10 @@ export default function SliceParty() {
         </>}
         {!!note && <Text accessibilityLiveRegion="polite" style={styles.note}>{note}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+        {!connected && <View style={styles.modeRow}>
+          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(GAME_URL + 'support.html').catch(() => setError('Could not open support.')); }}><Text style={styles.leave}>Help and support</Text></Pressable>
+          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(GAME_URL + 'privacy.html').catch(() => setError('Could not open privacy policy.')); }}><Text style={styles.leave}>Privacy policy</Text></Pressable>
+        </View>}
       </ScrollView>
     </KeyboardAvoidingView>
     <Modal visible={scanner} animationType="slide" onRequestClose={() => setScanner(false)}>

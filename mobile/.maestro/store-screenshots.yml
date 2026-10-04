@@ -1,0 +1,31 @@
+appId: com.emirhansimsek.sliceparty
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: SLICE PARTY
+    timeout: 60000
+- takeScreenshot: 01-home
+- scrollUntilVisible:
+    element:
+      id: new-room
+    direction: DOWN
+- tapOn:
+    id: new-room
+- assertVisible: Send to a computer
+- takeScreenshot: 02-create-room
+- scrollUntilVisible:
+    element:
+      id: create-game-link
+    direction: DOWN
+- tapOn:
+    id: create-game-link
+- extendedWaitUntil:
+    visible: Send game link
+    timeout: 30000
+- takeScreenshot: 03-share-room
+- scrollUntilVisible:
+    element: Use a TV web browser
+    direction: DOWN
+- tapOn: Use a TV web browser
+- takeScreenshot: 04-play-on-tv

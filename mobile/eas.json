@@ -1,9 +1,37 @@
 {
-  "cli": {"version": ">= 16.0.0", "appVersionSource": "remote"},
-  "build": {
-    "preview": {"distribution": "internal"},
-    "simulator": {"distribution": "internal", "ios": {"simulator": true}},
-    "production": {"autoIncrement": true}
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
-  "submit": {"production": {}}
+  "build": {
+    "preview": {
+      "distribution": "internal"
+    },
+    "simulator": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "credentialsSource": "local"
+    },
+    "screenshots": {
+      "withoutCredentials": true,
+      "distribution": "internal",
+      "config": "screenshots.yml",
+      "ios": {
+        "simulator": true,
+        "image": "latest"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6818936828"
+      }
+    }
+  }
 }

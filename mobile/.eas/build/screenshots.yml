@@ -1,0 +1,17 @@
+build:
+  name: Build iOS app and capture App Store screenshots
+  steps:
+    - eas/build
+    - eas/install_maestro
+    - run:
+        name: Prepare iPhone simulator
+        command: node scripts/prepare-ios-screenshots.cjs
+    - run:
+        name: Capture real iOS screens
+        command: maestro --device "$(cat artifacts/screenshots/device-udid.txt)" test --test-output-dir artifacts/screenshots/maestro .maestro/store-screenshots.yml
+    - eas/upload_artifact:
+        name: Upload iOS screenshot evidence
+        if: ${ always() }
+        inputs:
+          type: build-artifact
+          path: mobile/artifacts/screenshots
